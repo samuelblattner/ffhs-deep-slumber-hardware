@@ -2,8 +2,10 @@ from enum import Enum
 
 
 class MessageType(Enum):
-    SETTINGS = 1
-    COMMAND = 2
+    HELLO = 1
+    SETTINGS = 2
+    COMMAND = 3
+    EVENT = 4
     HEARTBEAT = 100
 
 

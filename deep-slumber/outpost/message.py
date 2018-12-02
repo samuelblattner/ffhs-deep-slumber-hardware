@@ -4,7 +4,7 @@ from abc import ABCMeta, abstractmethod
 from json import JSONDecodeError
 from typing import Optional
 
-from outpost.enum import EventType
+from outpost.enum import EventType, MessageType
 
 
 class AbstractMessage:
@@ -12,6 +12,16 @@ class AbstractMessage:
     __metaclass__ = ABCMeta
 
     fields = ()
+    _msgType: MessageType
+
+    def serialize(self) -> str:
+        out = {}
+        for field in self.fields:
+            if hasattr(self, field):
+                out.setdefault(field, getattr(self, field))
+
+        out.setdefault('msgType', self._msgType.value)
+        return json.dumps(out)
 
     @classmethod
     def deserialize(cls, raw: str) -> Optional:
@@ -31,6 +41,8 @@ class AbstractMessage:
 
 class Settings(AbstractMessage):
 
+    msgType = MessageType.SETTINGS
+
     wakeTime = 0
     wakeMaxSpan = 0
     wakeOffsetEstimator = None
@@ -45,6 +57,20 @@ class Settings(AbstractMessage):
 
 
 class Event(AbstractMessage):
+
+    _msgType = MessageType.EVENT
+
     eventType: EventType
     timestamp: int
     value = 0
+
+
+class HelloMessage(AbstractMessage):
+
+    fields = ('hwid',)
+
+    _msgType = MessageType.HELLO
+    hwid = -1
+
+    def __init__(self, hwid):
+        self.hwid = hwid

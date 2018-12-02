@@ -2,9 +2,11 @@ from typing import List
 
 from outpost.exceptions import OutpostConnectionException
 from outpost.interfaces import OutpostListener
-from outpost.message import AbstractMessage
+from outpost.message import AbstractMessage, HelloMessage
 import websockets
 import asyncio
+
+
 
 
 class Outpost:
@@ -16,11 +18,10 @@ class Outpost:
 
     async def listen_for_messages(self):
         async with websockets.connect('ws://192.168.1.41:8777') as self.__socket:
-            await self.__socket.send(self.HWID)
-            # while True:
-            print('async wait for message')
-            raw_msg = await self.__socket.recv()
-            self.onMessage(raw_msg)
+            await self.__socket.send(HelloMessage(hwid=self.HWID).serialize())
+            while True:
+                raw_msg = await self.__socket.recv()
+                self.onMessage(raw_msg)
 
     def connect(self) -> bool:
         asyncio.get_event_loop().run_until_complete(self.listen_for_messages())
