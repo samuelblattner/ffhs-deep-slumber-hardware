@@ -10,9 +10,11 @@ class MessageType(Enum):
 
 
 class EventType(Enum):
+    IGNORE = 0
     START_REC = 1
     STOP_REC = 2
     PAUSE_REC = 3
+    RESUME_REC = 4
     START_WAKING = 10
     USER_ABORT_WAKING = 11
     END_WAKING = 12

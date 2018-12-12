@@ -2,6 +2,8 @@ import json
 from abc import ABCMeta, abstractmethod
 
 from json import JSONDecodeError
+
+from datetime import datetime
 from typing import Optional
 
 from outpost.enum import EventType, MessageType
@@ -60,9 +62,16 @@ class Event(AbstractMessage):
 
     _msgType = MessageType.EVENT
 
-    eventType: EventType
+    event_type: EventType
     timestamp: int
     value = 0
+
+    def __init__(self, event_type: EventType.IGNORE, value=0):
+        self.timestamp = datetime.now()
+        self.event_type = event_type
+
+    def __str__(self):
+        return 'Event {}@{}: {}'.format(self.event_type, self.timestamp, self.value)
 
 
 class HelloMessage(AbstractMessage):

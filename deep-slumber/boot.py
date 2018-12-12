@@ -10,11 +10,10 @@ try:
 except OutpostConnectionException:
     exit(1)
 
-outpost.connect()
 settings = outpost.getSettings()
-logger = Logger()
-
-
-orchestra = Orchestra()
-
+logger = Logger(outpost)
+orchestra = Orchestra(settings, logger)
 risenshine = RiseNShine()
+
+
+outpost.connect()
