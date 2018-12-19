@@ -2,7 +2,7 @@ import json
 from abc import ABCMeta, abstractmethod
 
 from json import JSONDecodeError
-
+import time
 from datetime import datetime
 from typing import Optional
 
@@ -27,7 +27,6 @@ class AbstractMessage:
 
     @classmethod
     def deserialize(cls, raw: str) -> Optional:
-
         try:
             data = json.loads(raw)
         except JSONDecodeError:
@@ -37,7 +36,6 @@ class AbstractMessage:
         for field_name in cls.fields:
             if hasattr(instance, field_name):
                 setattr(instance, field_name, data.get(field_name))
-
         return instance
 
 
@@ -53,25 +51,54 @@ class Settings(AbstractMessage):
     irSensitivity = 0
     dataDensity = 1
 
-    @staticmethod
-    def deserialize(raw: str):
-        return Settings()
+    fields = (
+        'wakeTime',
+        'wakeMaxSpan',
+        'wakeOffsetEstimator',
+        'accSensitivity',
+        'gyrSensitivity',
+        'irSensitivity',
+        'dataDensity',
+    )
 
+    @classmethod
+    def deserialize(cls, raw: str):
+        settings = super(Settings, cls).deserialize(raw)
+        if settings.wakeTime is not None:
+            settings.wakeTime = datetime.strptime(settings.wakeTime.get('date'), '%Y-%m-%d %H:%M:%S.%f')
+
+        return settings
 
 class Event(AbstractMessage):
 
     _msgType = MessageType.EVENT
 
     event_type: EventType
-    timestamp: int
+    timestamp: datetime
     value = 0
+
+    fields = (
+        'even_type',
+        'timestamp',
+        'value'
+    )
 
     def __init__(self, event_type: EventType.IGNORE, value=0):
         self.timestamp = datetime.now()
         self.event_type = event_type
+        self.value = value
 
     def __str__(self):
         return 'Event {}@{}: {}'.format(self.event_type, self.timestamp, self.value)
+
+    def serialize(self):
+        j = json.dumps({
+            'msgType': self._msgType.value,
+            'event_type': self.event_type.value,
+            'timestamp': self.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+            'value': self.value
+        })
+        return j
 
 
 class HelloMessage(AbstractMessage):

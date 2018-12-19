@@ -15,7 +15,7 @@ thres = 0.05
 record = []
 i = 0
 
-endtime = datetime(2018, 9, 25, 12, 30)
+endtime = datetime(2018, 12, 25, 12, 30)
 
 while datetime.now() < endtime:
     orient = sense.get_gyroscope_raw()

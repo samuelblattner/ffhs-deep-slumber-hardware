@@ -3,9 +3,9 @@ import threading
 import asyncio
 from RPi import GPIO
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from sense_hat import SenseHat
-from typing import Optional
 
 from logger.logger import Logger
 from orchestra.enums import OrchestraState
@@ -21,18 +21,20 @@ class Orchestra:
     PAUSED_TO_IDLE_STATE_TIMEOUT = 10 * 60  # 10 minutes
     MOVEMENT_THREASHOLD = 0.05
 
-    MOVEMENT_POLL_INTERVAL = 5  # Every 5 seconds
+    NUM_NORMALIZING_MOVEMENT_POLLS = 1
+
+    MOVEMENT_POLL_INTERVAL = 1  # Every 5 seconds
     TEMPERATURE_POLL_INTERVAL = 10 * 60  # Every 10 minutes
     PRESURE_POLL_INTERVAL = 10 * 60  # Every 10 minutes
     HUMIDITY_POLL_INTERVAL = 10 * 60  # Every 10 minutes
 
     READY_TO_IDLE_STATE_TIMEOUT = 1 * 60
-    READY_TO_RECORDING_STATE_TIMEOUT = 30  # 10 minutes
+    READY_TO_RECORDING_STATE_TIMEOUT = 5  # 10 minutes
     PAUSED_TO_IDLE_STATE_TIMEOUT = 30  # 10 minutes
 
-    MOVEMENT_THREASHOLD = 0.05
+    MOVEMENT_THREASHOLD = 0.04
 
-    MOVEMENT_POLL_INTERVAL = 5  # Every 5 seconds
+    MOVEMENT_POLL_INTERVAL = 1  # Every 5 seconds
     TEMPERATURE_POLL_INTERVAL = 1 * 60  # Every 10 minutes
     PRESURE_POLL_INTERVAL = 1 * 60  # Every 10 minutes
     HUMIDITY_POLL_INTERVAL = 1 * 60  # Every 10 minutes
@@ -58,7 +60,8 @@ class Orchestra:
         'polling_fn_name': 'get_gyroscope_raw',
         'handler_fn_name': 'on_movement_signal',
         'interval': MOVEMENT_POLL_INTERVAL,
-        'diff_fn': lambda val: abs(val[1]['x'] - val[0]['x'] + val[1]['y'] - val[0]['y'] + val[1]['z'] - val[0]['z']) if val[0] is not None else 0
+        # 'diff_fn': lambda val: abs(val[1]['pitch'] - val[0]['pitch']) + abs(val[1]['roll'] - val[0]['roll']) + abs(val[1]['yaw'] - val[0]['yaw']) if val[0] is not None else 0
+        'diff_fn': lambda val: abs(val[1]['x'] - val[0]['x']) + abs(val[1]['y'] - val[0]['y']) + abs(val[1]['z'] - val[0]['z']) if val[0] is not None else 0
     },
     )
 
@@ -71,10 +74,13 @@ class Orchestra:
     __sensehat: SenseHat = None
 
     __lastMovementTime: datetime = None
+    __lastIRTime: datetime = None
 
     __ready_to_idle_state_timer = None
     __ready_to_ready_to_recording_timer = None
     __paused_to_idle_timer = None
+    __normalizing_polls = 0
+    __thread_pool_executor = None
 
     __loop = None
 
@@ -83,13 +89,14 @@ class Orchestra:
         self.__logger = logger
         self.__settings = settings
         self.__set_up_IR()
+        self.__thread_pool_executor = ThreadPoolExecutor()
+
         self.__set_up_sensehat()
 
     def __activate_ready_to_idle_timeout(self):
 
         if self.__ready_to_idle_state_timer is not None:
             self.__cancel_ready_to_idle_timeout()
-        print('activating going to idle')
         self.__ready_to_idle_state_timer = threading.Timer(self.READY_TO_IDLE_STATE_TIMEOUT, self.__go_to_idle_state)
         self.__ready_to_idle_state_timer.start()
 
@@ -112,7 +119,6 @@ class Orchestra:
 
     def __activate_ready_to_recording_timeout(self):
         if self.__ready_to_ready_to_recording_timer is None:
-            print('activating going to recording', self.READY_TO_RECORDING_STATE_TIMEOUT)
             self.__ready_to_ready_to_recording_timer = threading.Timer(self.READY_TO_RECORDING_STATE_TIMEOUT, self.__go_to_recording_state)
             self.__ready_to_ready_to_recording_timer.start()
 
@@ -132,17 +138,13 @@ class Orchestra:
         GPIO.add_event_detect(self.IR_SENSOR_PIN, GPIO.BOTH, self.on_IR_signal)
 
     def __set_up_sensehat(self):
-        print('going to set up')
         self.__sensehat = SenseHat()
-        print('set up sensehat')
-        if not self.__loop.is_running():
-            self.__loop.run_until_complete(self.__run_sensehat_polling())
-        else:
-            asyncio.ensure_future(self.__run_sensehat_polling(), loop=self.__loop)
+        try:
+            asyncio.get_event_loop()
+        except RuntimeError:
+            asyncio.set_event_loop(asyncio.new_event_loop())
 
-
-    def __person_is_present(self) -> bool:
-        return GPIO.input(self.IR_SENSOR_PIN) == 1
+        asyncio.get_event_loop().run_in_executor(self.__thread_pool_executor, self.__run_sensehat_polling)
 
     def __go_to_idle_state(self):
         self.__cancel_all_timeouts()
@@ -154,11 +156,9 @@ class Orchestra:
                 )
             )
         self.__state = OrchestraState.IDLE
-        print('went to idle')
 
     def __go_to_recording_state(self):
         if self.__state in (OrchestraState.READY, OrchestraState.PAUSED):
-            print('went to recording')
             self.__state = OrchestraState.RECORDING
             self.__logger.log_event(
                 Event(event_type=EventType.START_REC)
@@ -168,8 +168,9 @@ class Orchestra:
         if self.__state == OrchestraState.RECORDING:
             self.__state = OrchestraState.PAUSED
 
-    async def __run_sensehat_polling(self):
-        print('START POLLING')
+    def __run_sensehat_polling(self):
+
+        self.__normalizing_polls = 0
         while self.__state != OrchestraState.IDLE:
 
             for poll_info in self.SENSEHAT_POLLING:
@@ -199,20 +200,23 @@ class Orchestra:
                     self.SENSEHAT_POLLING_STATE[poll_name] = poll_state
 
             time.sleep(2)
-        print('ENDED POLLING')
 
     def on_IR_signal(self, *args, **kwargs):
 
         # On, i.e. person present
+        print('IR SIGNAL !!!!!!!!!!!!!!!!', GPIO.input(self.IR_SENSOR_PIN))
+        self.__lastIRTime = datetime.now()
+
         if GPIO.input(self.IR_SENSOR_PIN) == 1:
 
             if self.__state == OrchestraState.IDLE:
                 self.__state = OrchestraState.READY
-                print('entering ready state')
                 self.__set_up_sensehat()
                 self.__activate_ready_to_idle_timeout()
 
             elif self.__state == OrchestraState.RECORDING:
+
+                print('going to pause')
                 self.__state = OrchestraState.PAUSED
                 self.__logger.log_event(
                     Event(
@@ -223,7 +227,9 @@ class Orchestra:
 
     def on_movement_signal(self, value, diff):
 
-        if diff > self.MOVEMENT_THREASHOLD:
+        print(value, diff)
+
+        if diff > self.MOVEMENT_THREASHOLD and self.__normalizing_polls > self.NUM_NORMALIZING_MOVEMENT_POLLS:
 
             # If there's movement, prevent the system from going into
             # idle mode.
@@ -240,8 +246,9 @@ class Orchestra:
                             value=0
                         )
                     )
+                    self.__normalizing_polls = 0
 
-            elif self.__state == OrchestraState.PAUSED:
+            elif self.__state == OrchestraState.PAUSED and (datetime.now() - self.__lastIRTime).seconds > 2:
                 self.__state = OrchestraState.RECORDING
                 self.__logger.log_event(
                     Event(
@@ -249,6 +256,8 @@ class Orchestra:
                     )
                 )
                 self.__cancel_paused_to_idle_timeout()
+        else:
+            self.__normalizing_polls += 1
 
     def on_temperature_signal(self, value, diff):
         if self.__state == OrchestraState.RECORDING:
