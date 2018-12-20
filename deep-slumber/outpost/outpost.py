@@ -1,24 +1,30 @@
 import json
 
-import time
 from typing import List
-
+from websockets import ConnectionClosed
+import time
+from logger.interfaces import LogConsumer
 from outpost.enum import MessageType
 from outpost.interfaces import OutpostListener
-from outpost.message import AbstractMessage, HelloMessage, Event, Settings
+from outpost.message import HelloMessage, Settings
 import websockets
 import asyncio
 
-from risenshine.risenshine import RiseNShine
+from risenshine.interfaces import WakingOperator
 
 
-class Outpost:
+class Outpost(LogConsumer):
 
-    HWID = 12345678
+    def consume_log_message(self, msg):
+        msg.hwid = self.HWID
+        self.__main_loop.call_soon_threadsafe(self.__message_queue.put_nowait, msg)
+
+    HWID = '7c222fb2927d828af22f592134e89324'
 
     __socket = None
     __message_queue: asyncio.Queue
     __main_loop = None
+    __waking_operator: WakingOperator = None
     listeners: List[OutpostListener]
 
     def __init__(self):
@@ -26,31 +32,51 @@ class Outpost:
         self.__message_queue = asyncio.Queue(maxsize=2**18)
         self.__main_loop = asyncio.get_event_loop()
 
+    def set_waking_oerator(self, waking_operator: WakingOperator):
+        self.__waking_operator = waking_operator
+
     async def listen_for_messages(self):
         while True:
-            raw_msg = await self.__socket.recv()
+            try:
+                raw_msg = await self.__socket.recv()
+            except ConnectionClosed:
+                self.__main_loop.call_soon_threadsafe(self.__message_queue.put_nowait, 'CONNECTION_FAILED')
+                return
             self.onMessage(raw_msg)
 
     async def send_messages(self):
         while True:
             msg = await self.__message_queue.get()
-            await self.__socket.send(msg.serialize())
+            if msg == 'CONNECTION_FAILED':
+                return
+            try:
+                await self.__socket.send(msg.serialize())
+            except ConnectionClosed:
+                return
             self.__message_queue.task_done()
 
     async def establish_socket(self):
-        self.__socket = await websockets.connect('ws://192.168.1.41:8777')
+        try:
+            # self.__socket = await websockets.connect('ws://deep-slumber.samuelblattner.ch:8777')
+            self.__socket = await websockets.connect('ws://192.168.1.2:8777')
+        except ConnectionRefusedError:
+            self.__socket = None
+            return
+
         await self.__socket.send(HelloMessage(hwid=self.HWID).serialize())
 
     async def start_message_queues(self):
         consumer = asyncio.ensure_future(self.listen_for_messages())
         producer = asyncio.ensure_future(self.send_messages())
-        done, pending = await asyncio.wait([
-            consumer, producer
-        ])
+        await asyncio.wait([consumer, producer])
 
     def connect(self) -> bool:
-        asyncio.get_event_loop().run_until_complete(self.establish_socket())
-        asyncio.get_event_loop().run_until_complete(self.start_message_queues())
+        while True:
+            asyncio.get_event_loop().run_until_complete(self.establish_socket())
+            if self.__socket:
+                asyncio.get_event_loop().run_until_complete(self.start_message_queues())
+
+            time.sleep(10)
         return True
 
     def disconnect(self):
@@ -63,12 +89,8 @@ class Outpost:
         if listener not in self.listeners:
             self.listeners.append(listener)
 
-    def send_message(self, msg: AbstractMessage):
-        self.__main_loop.call_soon_threadsafe(self.__message_queue.put_nowait, msg)
-        self.__main_loop.call_soon_threadsafe(lambda: print(self.__message_queue.qsize()))
-
     def digestSettings(self, settings: Settings):
-        RiseNShine.setWakeTime(settings.wakeTime)
+        self.__waking_operator.set_waking_time(settings.latestWakeTime, settings.earliestWakeTime)
 
     def onMessage(self, raw: str):
 
@@ -79,4 +101,3 @@ class Outpost:
 
         if MessageType(obj.get('msgType')) == MessageType.SETTINGS:
             self.digestSettings(Settings.deserialize(raw))
-

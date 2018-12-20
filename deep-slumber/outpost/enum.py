@@ -22,3 +22,4 @@ class EventType(Enum):
     TEMPERATURE = 1001
     PRESSURE = 1002
     HUMIDITY = 1003
+    STATE_CHANGE = 2000

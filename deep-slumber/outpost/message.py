@@ -10,7 +10,6 @@ from outpost.enum import EventType, MessageType
 
 
 class AbstractMessage:
-
     __metaclass__ = ABCMeta
 
     fields = ()
@@ -40,10 +39,10 @@ class AbstractMessage:
 
 
 class Settings(AbstractMessage):
-
     msgType = MessageType.SETTINGS
 
-    wakeTime = 0
+    earliestWakeTime = 0
+    latestWakeTime = 0
     wakeMaxSpan = 0
     wakeOffsetEstimator = None
     accSensitivity = 0
@@ -52,7 +51,8 @@ class Settings(AbstractMessage):
     dataDensity = 1
 
     fields = (
-        'wakeTime',
+        'earliestWakeTime',
+        'latestWakeTime',
         'wakeMaxSpan',
         'wakeOffsetEstimator',
         'accSensitivity',
@@ -64,21 +64,25 @@ class Settings(AbstractMessage):
     @classmethod
     def deserialize(cls, raw: str):
         settings = super(Settings, cls).deserialize(raw)
-        if settings.wakeTime is not None:
-            settings.wakeTime = datetime.strptime(settings.wakeTime.get('date'), '%Y-%m-%d %H:%M:%S.%f')
+        if settings.earliestWakeTime is not None:
+            settings.earliestWakeTime = datetime.strptime(settings.earliestWakeTime.get('date'), '%Y-%m-%d %H:%M:%S.%f')
+        if settings.latestWakeTime is not None:
+            settings.latestWakeTime = datetime.strptime(settings.latestWakeTime.get('date'), '%Y-%m-%d %H:%M:%S.%f')
 
         return settings
 
-class Event(AbstractMessage):
 
+class Event(AbstractMessage):
     _msgType = MessageType.EVENT
 
+    hwid: str
     event_type: EventType
     timestamp: datetime
     value = 0
 
     fields = (
-        'even_type',
+        'hwid',
+        'event_type',
         'timestamp',
         'value'
     )
@@ -87,12 +91,14 @@ class Event(AbstractMessage):
         self.timestamp = datetime.now()
         self.event_type = event_type
         self.value = value
+        self.hwid = None
 
     def __str__(self):
         return 'Event {}@{}: {}'.format(self.event_type, self.timestamp, self.value)
 
     def serialize(self):
         j = json.dumps({
+            'hwid': self.hwid,
             'msgType': self._msgType.value,
             'event_type': self.event_type.value,
             'timestamp': self.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
@@ -102,7 +108,6 @@ class Event(AbstractMessage):
 
 
 class HelloMessage(AbstractMessage):
-
     fields = ('hwid',)
 
     _msgType = MessageType.HELLO

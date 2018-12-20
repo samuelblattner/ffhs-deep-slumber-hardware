@@ -1,14 +1,16 @@
+from typing import List
+
+from logger.interfaces import LogConsumer
 from outpost.message import Event
-from outpost.outpost import Outpost
 
 
 class Logger:
 
-    __outpost: Outpost = None
+    __consumers: List[LogConsumer] = []
 
-    def __init__(self, outpost: Outpost):
-        self.__outpost = outpost
+    def __init__(self, consumers: List[LogConsumer]):
+        self.__consumers = consumers
 
     def log_event(self, event: Event):
-        print('Logging Event: {}'.format(event))
-        self.__outpost.send_message(event)
+        for consumer in self.__consumers:
+            consumer.consume_log_message(event)

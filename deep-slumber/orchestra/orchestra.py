@@ -5,6 +5,7 @@ from RPi import GPIO
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+from phue import Bridge
 from sense_hat import SenseHat
 
 from logger.logger import Logger
@@ -14,6 +15,8 @@ from outpost.message import Event, Settings
 
 
 class Orchestra:
+
+    GROUP = 2
 
     IR_SENSOR_PIN = 20
     READY_TO_IDLE_STATE_TIMEOUT = 3 * 60
@@ -29,42 +32,42 @@ class Orchestra:
     HUMIDITY_POLL_INTERVAL = 10 * 60  # Every 10 minutes
 
     READY_TO_IDLE_STATE_TIMEOUT = 1 * 60
-    READY_TO_RECORDING_STATE_TIMEOUT = 5  # 10 minutes
-    PAUSED_TO_IDLE_STATE_TIMEOUT = 30  # 10 minutes
+    READY_TO_RECORDING_STATE_TIMEOUT = 15  # 10 minutes
+    PAUSED_TO_IDLE_STATE_TIMEOUT = 10 * 60  # 10 minutes
 
     MOVEMENT_THREASHOLD = 0.04
 
     MOVEMENT_POLL_INTERVAL = 1  # Every 5 seconds
-    TEMPERATURE_POLL_INTERVAL = 1 * 60  # Every 10 minutes
-    PRESURE_POLL_INTERVAL = 1 * 60  # Every 10 minutes
-    HUMIDITY_POLL_INTERVAL = 1 * 60  # Every 10 minutes
+    TEMPERATURE_POLL_INTERVAL = 10 * 60  # Every 10 minutes
+    PRESURE_POLL_INTERVAL = 10 * 60  # Every 10 minutes
+    HUMIDITY_POLL_INTERVAL = 10 * 60  # Every 10 minutes
 
     SENSEHAT_POLLING_STATE = {}
     SENSEHAT_POLLING = ({
-        'name': 'Temperature',
-        'polling_fn_name': 'get_temperature',
-        'handler_fn_name': 'on_temperature_signal',
-        'interval': TEMPERATURE_POLL_INTERVAL
-    },{
-        'name': 'Pressure',
-        'polling_fn_name': 'get_pressure',
-        'handler_fn_name': 'on_pressure_signal',
-        'interval': PRESURE_POLL_INTERVAL
-    },{
-        'name': 'Humidity',
-        'polling_fn_name': 'get_humidity',
-        'handler_fn_name': 'on_humidity_signal',
-        'interval': HUMIDITY_POLL_INTERVAL
-    },{
-        'name': 'Movement',
-        'polling_fn_name': 'get_gyroscope_raw',
-        'handler_fn_name': 'on_movement_signal',
-        'interval': MOVEMENT_POLL_INTERVAL,
-        # 'diff_fn': lambda val: abs(val[1]['pitch'] - val[0]['pitch']) + abs(val[1]['roll'] - val[0]['roll']) + abs(val[1]['yaw'] - val[0]['yaw']) if val[0] is not None else 0
-        'diff_fn': lambda val: abs(val[1]['x'] - val[0]['x']) + abs(val[1]['y'] - val[0]['y']) + abs(val[1]['z'] - val[0]['z']) if val[0] is not None else 0
-    },
+                            'name': 'Temperature',
+                            'polling_fn_name': 'get_temperature',
+                            'handler_fn_name': 'on_temperature_signal',
+                            'interval': TEMPERATURE_POLL_INTERVAL
+                        }, {
+                            'name': 'Pressure',
+                            'polling_fn_name': 'get_pressure',
+                            'handler_fn_name': 'on_pressure_signal',
+                            'interval': PRESURE_POLL_INTERVAL
+                        }, {
+                            'name': 'Humidity',
+                            'polling_fn_name': 'get_humidity',
+                            'handler_fn_name': 'on_humidity_signal',
+                            'interval': HUMIDITY_POLL_INTERVAL
+                        }, {
+                            'name': 'Movement',
+                            'polling_fn_name': 'get_gyroscope_raw',
+                            'handler_fn_name': 'on_movement_signal',
+                            'interval': MOVEMENT_POLL_INTERVAL,
+                            # 'diff_fn': lambda val: abs(val[1]['pitch'] - val[0]['pitch']) + abs(val[1]['roll'] - val[0]['roll']) + abs(val[1]['yaw'] - val[0]['yaw']) if val[0] is not None else 0
+                            'diff_fn': lambda val: abs(val[1]['x'] - val[0]['x']) + abs(val[1]['y'] - val[0]['y']) + abs(val[1]['z'] - val[0]['z']) if val[
+                                                                                                                                                           0] is not None else 0
+                        },
     )
-
 
     __logger: Logger = None
     __settings: Settings = None
@@ -72,6 +75,7 @@ class Orchestra:
     __state: OrchestraState = OrchestraState.IDLE
 
     __sensehat: SenseHat = None
+    __phue_bridge: Bridge = None
 
     __lastMovementTime: datetime = None
     __lastIRTime: datetime = None
@@ -92,6 +96,7 @@ class Orchestra:
         self.__thread_pool_executor = ThreadPoolExecutor()
 
         self.__set_up_sensehat()
+        self.__phue_bridge = Bridge('192.168.1.129')
 
     def __activate_ready_to_idle_timeout(self):
 
@@ -155,11 +160,19 @@ class Orchestra:
                     event_type=EventType.STOP_REC
                 )
             )
+
+        self.__logger.log_event(
+            Event(
+                event_type=EventType.STATE_CHANGE,
+                value=OrchestraState.IDLE.value
+            )
+        )
         self.__state = OrchestraState.IDLE
 
     def __go_to_recording_state(self):
         if self.__state in (OrchestraState.READY, OrchestraState.PAUSED):
             self.__state = OrchestraState.RECORDING
+            self.__phue_bridge.set_group(self.GROUP, {'on': False}, transitiontime=100)
             self.__logger.log_event(
                 Event(event_type=EventType.START_REC)
             )
@@ -204,19 +217,31 @@ class Orchestra:
     def on_IR_signal(self, *args, **kwargs):
 
         # On, i.e. person present
-        print('IR SIGNAL !!!!!!!!!!!!!!!!', GPIO.input(self.IR_SENSOR_PIN))
         self.__lastIRTime = datetime.now()
 
         if GPIO.input(self.IR_SENSOR_PIN) == 1:
 
             if self.__state == OrchestraState.IDLE:
+
+                self.__logger.log_event(
+                    Event(
+                        event_type=EventType.STATE_CHANGE,
+                        value=OrchestraState.READY.value
+                    )
+                )
                 self.__state = OrchestraState.READY
                 self.__set_up_sensehat()
                 self.__activate_ready_to_idle_timeout()
 
             elif self.__state == OrchestraState.RECORDING:
 
-                print('going to pause')
+                self.__logger.log_event(
+                    Event(
+                        event_type=EventType.STATE_CHANGE,
+                        value=OrchestraState.PAUSED.value
+                    )
+                )
+
                 self.__state = OrchestraState.PAUSED
                 self.__logger.log_event(
                     Event(
@@ -226,8 +251,6 @@ class Orchestra:
                 self.__activate_paused_to_idle_timeout()
 
     def on_movement_signal(self, value, diff):
-
-        print(value, diff)
 
         if diff > self.MOVEMENT_THREASHOLD and self.__normalizing_polls > self.NUM_NORMALIZING_MOVEMENT_POLLS:
 
@@ -240,6 +263,18 @@ class Orchestra:
 
             elif self.__state == OrchestraState.RECORDING:
                 if diff > self.MOVEMENT_THREASHOLD:
+                    self.__logger.log_event(
+                        Event(
+                            event_type=EventType.MOVEMENT,
+                            value=0
+                        )
+                    )
+                    self.__logger.log_event(
+                        Event(
+                            event_type=EventType.MOVEMENT,
+                            value=1
+                        )
+                    )
                     self.__logger.log_event(
                         Event(
                             event_type=EventType.MOVEMENT,
@@ -285,6 +320,9 @@ class Orchestra:
                     value=value
                 )
             )
+
+    def set_wake_light_step(self, step: float):
+        self.__phue_bridge.set_group(self.GROUP, {'on': True, 'bri': min(int(255 * step), 255)}, transitiontime=10)
 
     def __del__(self):
         GPIO.cleanup()
