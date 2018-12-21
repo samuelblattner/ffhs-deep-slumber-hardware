@@ -5,13 +5,16 @@ from outpost.exceptions import OutpostConnectionException
 from risenshine.risenshine import RiseNShine
 
 try:
-    outpost = Outpost()
-except OutpostConnectionException:
-    exit(2)
-settings = outpost.getSettings()
-logger = Logger([outpost])
-orchestra = Orchestra(settings, logger)
-risenshine = RiseNShine(orchestra, logger)
-outpost.set_waking_oerator(risenshine)
+    try:
+        outpost = Outpost()
+    except OutpostConnectionException:
+        exit(2)
+    settings = outpost.getSettings()
+    logger = Logger([outpost])
+    orchestra = Orchestra(settings, logger)
+    risenshine = RiseNShine(orchestra, logger)
+    outpost.set_waking_oerator(risenshine)
 
-outpost.connect()
+    outpost.connect()
+except Exception as e:
+    print(e, file=open('error.txt', 'a'))

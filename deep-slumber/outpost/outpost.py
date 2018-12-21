@@ -57,8 +57,8 @@ class Outpost(LogConsumer):
 
     async def establish_socket(self):
         try:
-            # self.__socket = await websockets.connect('ws://deep-slumber.samuelblattner.ch:8777')
-            self.__socket = await websockets.connect('ws://192.168.1.2:8777')
+            self.__socket = await websockets.connect('wss://deep-slumber.samuelblattner.ch:8777')
+            # self.__socket = await websockets.connect('ws://192.168.1.2:8777')
         except ConnectionRefusedError:
             self.__socket = None
             return
