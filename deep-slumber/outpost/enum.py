@@ -1,7 +1,16 @@
+"""
+Message and Event enums
+"""
+
+__author__ = 'Samuel Blattner'
+__version__ = '1.0.0'
+
+
 from enum import Enum
 
 
 class MessageType(Enum):
+    NO_TYPE = 0
     HELLO = 1
     SETTINGS = 2
     COMMAND = 3

@@ -1,8 +1,16 @@
-import json
-from abc import ABCMeta, abstractmethod
+"""
+Outpost messages module.
 
+Message formats for server communication.
+"""
+
+__author__ = 'Samuel Blattner'
+__version__ = '1.0.0'
+
+
+from abc import ABCMeta
+import json
 from json import JSONDecodeError
-import time
 from datetime import datetime
 from typing import Optional
 
@@ -10,36 +18,56 @@ from outpost.enum import EventType, MessageType
 
 
 class AbstractMessage:
+    """
+    Abstract Message class.
+    Provides simple mechanism for serialization/deserialization
+    """
     __metaclass__ = ABCMeta
 
-    fields = ()
+    _fields = ()
     _msgType: MessageType
-
-    def serialize(self) -> str:
-        out = {}
-        for field in self.fields:
-            if hasattr(self, field):
-                out.setdefault(field, getattr(self, field))
-
-        out.setdefault('msgType', self._msgType.value)
-        return json.dumps(out)
 
     @classmethod
     def deserialize(cls, raw: str) -> Optional:
+        """
+        Deserialize a given raw string into a message object.
+        :param raw: {str} Serialized representation of the message
+        :return: {AbstractMessage} Deserialized message object
+        """
         try:
             data = json.loads(raw)
         except JSONDecodeError:
             return None
 
         instance = cls()
-        for field_name in cls.fields:
+        for field_name in cls._fields:
             if hasattr(instance, field_name):
                 setattr(instance, field_name, data.get(field_name))
         return instance
 
+    def serialize(self) -> str:
+        """
+        Serialize this message object and return it as string.
+        :return: {str} Serialized message object
+        """
+        out = {}
+        for field in self._fields:
+            if hasattr(self, field):
+                out.setdefault(field, getattr(self, field))
+
+        out.setdefault('msgType', self._msgType.value)
+        return json.dumps(out)
+
+    def get_message_type(self) -> MessageType:
+        return self._msgType
+
 
 class Settings(AbstractMessage):
-    msgType = MessageType.SETTINGS
+    """
+    Settings message containing user settings
+    for waking/recording process.
+    """
+    _msgType = MessageType.SETTINGS
 
     earliestWakeTime = 0
     latestWakeTime = 0
@@ -50,7 +78,7 @@ class Settings(AbstractMessage):
     irSensitivity = 0
     dataDensity = 1
 
-    fields = (
+    _fields = (
         'earliestWakeTime',
         'latestWakeTime',
         'wakeMaxSpan',
@@ -73,6 +101,9 @@ class Settings(AbstractMessage):
 
 
 class Event(AbstractMessage):
+    """
+    Events sent by hardware.
+    """
     _msgType = MessageType.EVENT
 
     hwid: str
@@ -80,7 +111,7 @@ class Event(AbstractMessage):
     timestamp: datetime
     value = 0
 
-    fields = (
+    _fields = (
         'hwid',
         'event_type',
         'timestamp',
@@ -108,7 +139,10 @@ class Event(AbstractMessage):
 
 
 class HelloMessage(AbstractMessage):
-    fields = ('hwid',)
+    """
+    Initial message sent to server upon successful connection.
+    """
+    _fields = ('hwid',)
 
     _msgType = MessageType.HELLO
     hwid = -1

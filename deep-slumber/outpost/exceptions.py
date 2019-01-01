@@ -1,2 +1,0 @@
-class OutpostConnectionException(Exception):
-    pass
