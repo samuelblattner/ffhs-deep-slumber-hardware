@@ -3,7 +3,7 @@ Orchestra Module.
 
 Handles all sensor and actuator management and controlling.
 """
-
+from outpost.interfaces import OutpostListener
 
 __author__ = 'Samuel Blattner'
 __version__ = '1.0.0'
@@ -22,10 +22,11 @@ from sense_hat import SenseHat
 from logger.logger import Logger
 from orchestra.enums import OrchestraState
 from outpost.enum import EventType
-from outpost.message import Event, Settings
+from outpost.message import Event, Settings, AbstractMessage
 
 
-class Orchestra:
+class Orchestra(OutpostListener):
+
     GROUP = 2
     IR_SENSOR_PIN = 20
 
@@ -424,3 +425,7 @@ class Orchestra:
         Clean up GPIO upon instance destruction.
         """
         GPIO.cleanup()
+
+    # ================================== OutpostListener Methods =====================================
+    def on_message(self, msg: AbstractMessage):
+        pass

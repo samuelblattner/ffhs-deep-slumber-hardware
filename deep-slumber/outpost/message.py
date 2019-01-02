@@ -69,8 +69,8 @@ class Settings(AbstractMessage):
     """
     _msgType = MessageType.SETTINGS
 
-    earliestWakeTime = 0
-    latestWakeTime = 0
+    earliestWakeTime = None
+    latestWakeTime = None
     wakeMaxSpan = 0
     wakeOffsetEstimator = None
     accSensitivity = 0

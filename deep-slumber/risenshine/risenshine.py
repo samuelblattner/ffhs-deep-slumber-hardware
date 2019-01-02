@@ -18,7 +18,7 @@ from risenshine.waking import WakeTimerThread, WakeThread
 
 class RiseNShine(OutpostListener):
 
-    DEFAULT_WAKE_DURATION_MIN = 15
+    DEFAULT_WAKE_DURATION_SEC = 3600
 
     __alarm_thread: Thread = None
     __wake_thread: Thread = None
@@ -27,6 +27,7 @@ class RiseNShine(OutpostListener):
 
     __latest_wake_time: datetime = None
     __earliest_wake_time: datetime = None
+    __wake_max_span: int = DEFAULT_WAKE_DURATION_SEC
 
     def __init__(self, orchestra, logger):
         self.__orchestra = orchestra
@@ -48,10 +49,13 @@ class RiseNShine(OutpostListener):
 
         if latest_wake_time is not None:
             self.__alarm_thread = WakeTimerThread(
-                wake_time=earliest_wake_time if earliest_wake_time else latest_wake_time - timedelta(minutes=self.DEFAULT_WAKE_DURATION_MIN),
+                wake_time=earliest_wake_time if earliest_wake_time else latest_wake_time - timedelta(seconds=self.__wake_max_span),
                 wake_callback=self.on_decision_time
             )
             self.__alarm_thread.start()
+
+    def get_decision_time(self) -> datetime:
+        return self.__earliest_wake_time if self.__earliest_wake_time else self.__latest_wake_time - timedelta(seconds=self.__wake_max_span)
 
     def on_decision_time(self):
         """
@@ -62,7 +66,7 @@ class RiseNShine(OutpostListener):
         # TODO: Implement evaluation of waking process start based on trained ML model.
 
     def perform_waking(self):
-        if self.__wake_thread is None or not self.__wake_thread.is_alive():
+        if self.__orchestra and self.__wake_thread is None or self.__wake_thread is not None and not self.__wake_thread.is_alive():
             self.__wake_thread = WakeThread(
                 wake_step_fn=self.__orchestra.set_wake_light_step,
                 duration=(self.__latest_wake_time - self.__earliest_wake_time).seconds,
@@ -84,4 +88,5 @@ class RiseNShine(OutpostListener):
         Forward waking-settings to waking operator.
         :param settings: {Settings} Settings received from the server.
         """
+        self.__wake_max_span = settings.wakeMaxSpan if settings.wakeMaxSpan else self.__wake_max_span
         self.set_decision_time(settings.latestWakeTime, settings.earliestWakeTime)

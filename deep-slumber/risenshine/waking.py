@@ -29,6 +29,8 @@ class WakeTimerThread(Thread):
         before now().
         :param waketime: {datetime} Waking time to be re-scheduled.
         """
+        if waketime is None:
+            return waketime
         if waketime < datetime.now():
             waketime = waketime.replace(day=datetime.now().day + 1)
         return waketime
