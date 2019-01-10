@@ -206,15 +206,26 @@ class Orchestra(OutpostListener):
         Handles the transition from states READY or PAUSED to RECORDING state.
         """
         if self.__state in (OrchestraState.READY, OrchestraState.PAUSED):
-            self.__state = OrchestraState.RECORDING
 
-            # Dim lights to 'off' during 10 Seconds.
-            self.__phue_bridge.set_group(self.GROUP, {'on': False}, transitiontime=100)
+            self.__logger.log_event(
+                Event(
+                    event_type=EventType.STATE_CHANGE,
+                    value=OrchestraState.RECORDING.value
+                )
+            )
 
             # Tell server to start a new sleep cycle recording
             self.__logger.log_event(
                 Event(event_type=EventType.START_REC)
             )
+
+            self.__state = OrchestraState.RECORDING
+
+            # Dim lights to 'off' during 10 Seconds.
+            try:
+                self.__phue_bridge.set_group(self.GROUP, {'on': False}, transitiontime=100)
+            except:
+                pass
 
     def __go_to_paused_state(self):
         """
@@ -222,6 +233,12 @@ class Orchestra(OutpostListener):
         """
         if self.__state == OrchestraState.RECORDING:
             self.__state = OrchestraState.PAUSED
+            self.__logger.log_event(
+                Event(
+                    event_type=EventType.STATE_CHANGE,
+                    value=OrchestraState.PAUSED.value
+                )
+            )
 
     def __run_sensehat_polling(self):
         """
@@ -257,7 +274,7 @@ class Orchestra(OutpostListener):
 
                     self.SENSEHAT_POLLING_STATE[poll_name] = poll_state
 
-            time.sleep(2)
+            time.sleep(1)
 
     def on_IR_signal(self, val):
         """
@@ -418,7 +435,17 @@ class Orchestra(OutpostListener):
             )
 
     def set_wake_light_step(self, step: float):
-        self.__phue_bridge.set_group(self.GROUP, {'on': True, 'bri': min(int(255 * step), 255)}, transitiontime=10)
+        try:
+            self.__logger.log_event(
+                Event(
+                    EventType.LIGHT_INTENSITY,
+                    value=min(int(255 * step), 255)
+                )
+            )
+            if self.__phue_bridge:
+                self.__phue_bridge.set_group(self.GROUP, {'on': True, 'bri': min(int(255 * step), 255)}, transitiontime=1)
+        except:
+            pass
 
     def __del__(self):
         """
