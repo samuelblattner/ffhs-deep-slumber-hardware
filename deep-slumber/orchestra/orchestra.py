@@ -29,18 +29,30 @@ class Orchestra(OutpostListener):
 
     GROUP = 2
     IR_SENSOR_PIN = 20
+    #
+    # READY_TO_IDLE_STATE_TIMEOUT = 3 * 60
+    # READY_TO_RECORDING_STATE_TIMEOUT = 5 * 60  # 10 minutes
+    # PAUSED_TO_IDLE_STATE_TIMEOUT = 10 * 60  # 10 minutes
+    # MOVEMENT_THREASHOLD = 0.04
+    #
+    # NUM_NORMALIZING_MOVEMENT_POLLS = 1
+    #
+    # MOVEMENT_POLL_INTERVAL = 1  # Every 5 seconds
+    # TEMPERATURE_POLL_INTERVAL = 10 * 60  # Every 10 minutes
+    # PRESURE_POLL_INTERVAL = 10 * 60  # Every 10 minutes
+    # HUMIDITY_POLL_INTERVAL = 10 * 60  # Every 10 minutes
 
-    READY_TO_IDLE_STATE_TIMEOUT = 3 * 60
-    READY_TO_RECORDING_STATE_TIMEOUT = 5 * 60  # 10 minutes
-    PAUSED_TO_IDLE_STATE_TIMEOUT = 10 * 60  # 10 minutes
+    READY_TO_IDLE_STATE_TIMEOUT = 10
+    READY_TO_RECORDING_STATE_TIMEOUT = 10  # 10 minutes
+    PAUSED_TO_IDLE_STATE_TIMEOUT = 20  # 10 minutes
     MOVEMENT_THREASHOLD = 0.04
 
     NUM_NORMALIZING_MOVEMENT_POLLS = 1
 
     MOVEMENT_POLL_INTERVAL = 1  # Every 5 seconds
-    TEMPERATURE_POLL_INTERVAL = 10 * 60  # Every 10 minutes
-    PRESURE_POLL_INTERVAL = 10 * 60  # Every 10 minutes
-    HUMIDITY_POLL_INTERVAL = 10 * 60  # Every 10 minutes
+    TEMPERATURE_POLL_INTERVAL = 10  # Every 10 minutes
+    PRESURE_POLL_INTERVAL = 10  # Every 10 minutes
+    HUMIDITY_POLL_INTERVAL = 10  # Every 10 minutes
 
     SENSEHAT_POLLING_STATE = {}
     SENSEHAT_POLLING = (
@@ -95,7 +107,7 @@ class Orchestra(OutpostListener):
         self.__thread_pool_executor = ThreadPoolExecutor()
 
         self.__set_up_sensehat()
-        self.__phue_bridge = Bridge('192.168.1.129')
+        # self.__phue_bridge = Bridge('192.168.1.129')
 
     def __activate_ready_to_idle_timeout(self):
         """
