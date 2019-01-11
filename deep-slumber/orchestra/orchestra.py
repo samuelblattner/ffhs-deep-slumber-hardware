@@ -393,6 +393,12 @@ class Orchestra(OutpostListener):
                 self.__state = OrchestraState.RECORDING
                 self.__logger.log_event(
                     Event(
+                        event_type=EventType.STATE_CHANGE,
+                        value=OrchestraState.RECORDING.value
+                    )
+                )
+                self.__logger.log_event(
+                    Event(
                         event_type=EventType.RESUME_REC
                     )
                 )
